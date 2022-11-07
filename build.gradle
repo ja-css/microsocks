@@ -1,10 +1,12 @@
 plugins {
+    id 'java'
     id 'application'
     id "net.ltgt.errorprone" version "1.1.1"
+    id "com.github.johnrengelman.shadow" version "7.1.2"
 }
 
 application {
-    mainClass = 'com.microsocks.SocksMain'
+    mainClass = 'com.microsocks.Socks5Server'
 }
 
 compileJava {
@@ -67,8 +69,10 @@ tasks.withType(JavaCompile) {
     }
 }
 
+shadowJar { manifest { attributes 'Main-Class': 'com.microsocks.Socks5Server' } }
+
 jar {
     manifest {
-        attributes 'Main-Class': 'com.microsocks.SocksMain'
+        attributes 'Main-Class': 'com.microsocks.Socks5Server'
     }
 }
