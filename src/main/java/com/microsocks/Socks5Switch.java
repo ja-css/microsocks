@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 
 import static com.microsocks.Socks5Address.SOCKS5_ADDRESS_HOSTNAME;
 import static com.microsocks.Socks5Address.SOCKS5_ADDRESS_IPV4;
@@ -60,6 +61,12 @@ public class Socks5Switch<T> {
         buffer.appendShort((short)address.port);
 
         socket.write(buffer);
+    }
+
+    @Nullable private static String FORWARD;
+
+    public static void setForward(String forward) {
+        FORWARD = forward;
     }
 
     final Vertx vertx;
@@ -129,60 +136,65 @@ public class Socks5Switch<T> {
     }
 
     private void initOutgoingConnection(Buffer data) throws UnknownHostException {
-        int pos = 0;
+        if (FORWARD == null) {
+            int pos = 0;
 
-        short version = data.getUnsignedByte(pos++);
-        if (version != SOCKS5_VERSION) {
-            LOGGER.error("Initialization failed. Version mismatch {}", version);
-            failInit();
-            return;
-        }
-
-        short command = data.getUnsignedByte(pos++);
-        pos++;//1 byte reserved
-
-        if (command != SOCKS5_COMMAND_CONNECT) {
-            LOGGER.error("Initialization failed. Command mismatch {}", command);
-            failInit();
-            return;
-        }
-
-        short addressType = data.getUnsignedByte(pos++);
-
-        switch (addressType) {
-            case SOCKS5_ADDRESS_IPV4:
-                byte[] ipv4Bytes = new byte[4];
-                data.getBytes(pos, pos + 4, ipv4Bytes);
-                pos += 4;
-
-                outgoingAddress = Socks5Address.createIpv4(ipv4Bytes);
-                break;
-            case SOCKS5_ADDRESS_IPV6:
-                byte[] ipv6Bytes = new byte[16];
-                data.getBytes(pos, pos + 16, ipv6Bytes);
-                pos += 16;
-
-                outgoingAddress = Socks5Address.createIpv6(ipv6Bytes);
-                break;
-            case SOCKS5_ADDRESS_HOSTNAME:
-                short length = data.getUnsignedByte(pos++);
-                byte[] hostnameBytes = new byte[length];
-                data.getBytes(pos, pos + length, hostnameBytes);
-                pos += length;
-
-                outgoingAddress = Socks5Address.createHostname(hostnameBytes);
-                break;
-            default:
-                LOGGER.error("Initialization failed. Address type unknown {}", addressType);
+            short version = data.getUnsignedByte(pos++);
+            if (version != SOCKS5_VERSION) {
+                LOGGER.error("Initialization failed. Version mismatch {}", version);
                 failInit();
                 return;
+            }
+
+            short command = data.getUnsignedByte(pos++);
+            pos++;//1 byte reserved
+
+            if (command != SOCKS5_COMMAND_CONNECT) {
+                LOGGER.error("Initialization failed. Command mismatch {}", command);
+                failInit();
+                return;
+            }
+
+            short addressType = data.getUnsignedByte(pos++);
+
+            switch (addressType) {
+                case SOCKS5_ADDRESS_IPV4:
+                    byte[] ipv4Bytes = new byte[4];
+                    data.getBytes(pos, pos + 4, ipv4Bytes);
+                    pos += 4;
+
+                    outgoingAddress = Socks5Address.createIpv4(ipv4Bytes);
+                    break;
+                case SOCKS5_ADDRESS_IPV6:
+                    byte[] ipv6Bytes = new byte[16];
+                    data.getBytes(pos, pos + 16, ipv6Bytes);
+                    pos += 16;
+
+                    outgoingAddress = Socks5Address.createIpv6(ipv6Bytes);
+                    break;
+                case SOCKS5_ADDRESS_HOSTNAME:
+                    short length = data.getUnsignedByte(pos++);
+                    byte[] hostnameBytes = new byte[length];
+                    data.getBytes(pos, pos + length, hostnameBytes);
+                    pos += length;
+
+                    outgoingAddress = Socks5Address.createHostname(hostnameBytes);
+                    break;
+                default:
+                    LOGGER.error("Initialization failed. Address type unknown {}", addressType);
+                    failInit();
+                    return;
+            }
+
+            outgoingAddress.port = data.getUnsignedShort(pos);
+            //pos += 2;
+        } else {
+            String[] parts = FORWARD.split(":");
+            outgoingAddress = Socks5Address.createHostname(parts[0].getBytes(StandardCharsets.UTF_8));
+            outgoingAddress.port = Integer.parseInt(parts[1]);
         }
 
-        outgoingAddress.port = data.getUnsignedShort(pos);
-        //pos += 2;
-
         stage = Stage.CLIENT_STARTED;
-
         startClient();
     }
 

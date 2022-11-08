@@ -1,10 +1,16 @@
 package com.microsocks;
 
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.http.ClientAuth;
 import io.vertx.core.logging.SLF4JLogDelegateFactory;
+import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.NetServerOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+import java.util.Base64;
 
 public class Socks5Server extends AbstractVerticle {
     private static final Logger LOGGER = LoggerFactory.getLogger(Socks5Server.class);
@@ -21,17 +27,20 @@ public class Socks5Server extends AbstractVerticle {
         }
     }
 
-    // Convenience method so you can run it in your IDE
-    public static void main(String[] args) {
-        VertxRunner.runVerticle(Socks5Server.class);
+    private static boolean TLS_SERVER;
+
+    public static void setTlsServer(boolean tlsServer) {
+        TLS_SERVER = tlsServer;
     }
 
     @Override
     public void start() {
         LOGGER.info("Starting SOCKS5 server. host {} port {}", HOSTNAME, PORT);
 
-        NetServerOptions options = new NetServerOptions()
-                /*.setSsl(true)
+        NetServerOptions options = new NetServerOptions();
+        if (TLS_SERVER) {
+            options
+                .setSsl(true)
                 //Require client certificate
                 .setClientAuth(ClientAuth.REQUIRED)
                 .setKeyCertOptions(
@@ -42,22 +51,24 @@ public class Socks5Server extends AbstractVerticle {
                         new JksOptions()
                                 .setPath("servertruststore.jks")
                                 .setPassword("password")
-                )*/;
+                );
+        }
 
         vertx.createNetServer(options)
                 .connectHandler(sock -> {
-/*                    SSLSession sslSession = sock.sslSession();
+                    if (TLS_SERVER) {
+                        SSLSession sslSession = sock.sslSession();
 
-                    try {
-                        String pkFromWire = Base64.getEncoder().encodeToString(sslSession.getPeerCertificates()[0].getPublicKey().getEncoded());
-                        if (!pkFromWire.equals(PK)) {
-                            throw new SSLPeerUnverifiedException("MicroSocks: Client public key mismatch!");
+                        try {
+                            String pkFromWire = Base64.getEncoder().encodeToString(sslSession.getPeerCertificates()[0].getPublicKey().getEncoded());
+                            if (!pkFromWire.equals(PK)) {
+                                throw new SSLPeerUnverifiedException("MicroSocks: Client public key mismatch!");
+                            }
+                        } catch (SSLPeerUnverifiedException e) {
+                            LOGGER.info("Client connection issue.", e);
+                            sock.close();
                         }
-                    } catch (SSLPeerUnverifiedException e) {
-                        LOGGER.info("Client connection issue.", e);
-                        sock.close();
                     }
-*/
 
                     new Socks5Switch<>(vertx, sock);
                 }).listen(PORT, "localhost");

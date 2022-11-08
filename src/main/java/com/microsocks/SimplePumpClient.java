@@ -3,6 +3,7 @@ package com.microsocks;
 import com.google.common.base.Preconditions;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Vertx;
+import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.NetClientOptions;
 import io.vertx.core.net.NetSocket;
 import io.vertx.core.streams.Pump;
@@ -16,6 +17,12 @@ import java.util.concurrent.atomic.AtomicLong;
 public class SimplePumpClient extends AbstractVerticle {
     private static final Logger LOGGER = LoggerFactory.getLogger(SimplePumpClient.class);
     private static final AtomicLong ACTIVE_CONNECTIONS = new AtomicLong(0);
+
+    private static boolean TLS_CLIENT;
+
+    public static void setTlsClient(boolean tlsClient) {
+        TLS_CLIENT = tlsClient;
+    }
 
     final NetSocket serverSocket;
     final Socks5Address address;
@@ -48,8 +55,11 @@ public class SimplePumpClient extends AbstractVerticle {
 
     @Override
     public void start() {
-        NetClientOptions options = new NetClientOptions()
-/*                .setSsl(true)
+        NetClientOptions options = new NetClientOptions();
+
+        if (TLS_CLIENT) {
+            options
+                .setSsl(true)
                 .setKeyStoreOptions(
                         new JksOptions()
                                 .setPath("clientkeystore.jks")
@@ -59,7 +69,8 @@ public class SimplePumpClient extends AbstractVerticle {
                         new JksOptions()
                                 .setPath("clienttruststore.jks")
                                 .setPassword("password")
-                )*/;
+                );
+        }
 
         vertx.createNetClient(options)
                 .connect(address.port, address.hostname, res -> {
